@@ -3,6 +3,7 @@
 // Pregnancies,Glucose,BloodPressure,SkinThickness,Insulin,BMI,DiabetesPedigreeFunction,Age,Outcome
 public class DiabetesData
 {
+	public int Id { get; set; }
 	public int Pregnancies { get; set; }
 	public int Glucose { get; set; }
 	public int BloodPressure { get; set; }

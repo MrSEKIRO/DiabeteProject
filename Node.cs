@@ -1,8 +1,12 @@
-﻿using System;
+﻿using DiabeteProject;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace DiabeteProject
 {
@@ -10,7 +14,7 @@ namespace DiabeteProject
 	// Pregnancies,Glucose,BloodPressure,SkinThickness,Insulin,BMI,DiabetesPedigreeFunction,Age,Outcome
 	public enum DiabeteAttribute
 	{
-		Pregnancies=0,
+		Pregnancies = 0,
 		Glucose,
 		BloodPressure,
 		SkinThickness,
@@ -37,25 +41,32 @@ namespace DiabeteProject
 
 		public double CalculateInformationGain(List<DiabetesData> data, DiabeteAttribute attribute)
 		{
-			var attributeValues = data.Select(x => x.GetType().GetProperty(attribute.ToString()).GetValue(x)).Distinct();
-			var totalEntropy = CalculateEntropy(data);
-			var total = data.Count;
-			var sum = 0.0;
-			foreach(var attributeValue in attributeValues)
-			{
-				var subset = data.Where(x => x.GetType().GetProperty(attribute.ToString()).GetValue(x).Equals(attributeValue)).ToList();
-				var entropy = CalculateEntropy(subset);
-				var probability = (double)subset.Count / total;
-				sum += probability * entropy;
-			}
-			return totalEntropy - sum;
-		}
-		
+			// TODO: get average of current or all???
+			var average = data.Average(x => double.Parse(x.GetType().GetProperty(attribute.ToString()).GetValue(x).ToString()));
 
-		public DiabeteAttribute GetBestAttribute(List<DiabetesData> data)
+			var left = data.Where(x => double.Parse(x.GetType().GetProperty(attribute.ToString()).GetValue(x).ToString()) < average).ToList();
+			var right = data.Where(x => double.Parse(x.GetType().GetProperty(attribute.ToString()).GetValue(x).ToString()) >= average).ToList();
+
+			var entropy = CalculateEntropy(data);
+			var leftEntropy = CalculateEntropy(left);
+			var rightEntropy = CalculateEntropy(right);
+			var informationGain = entropy - (left.Count / (double)data.Count) * leftEntropy - (right.Count / (double)data.Count) * rightEntropy;
+			return informationGain;
+		}
+
+		public DiabeteAttribute GetBestAttribute(List<DiabetesData> data, bool[] isUsedAttribute)
 		{
-			var attributes = Enum.GetValues(typeof(DiabeteAttribute)).Cast<DiabeteAttribute>().ToList();
-			attributes.Remove(DiabeteAttribute.Outcome);
+			//var attributes = Enum.GetValues(typeof(DiabeteAttribute)).Cast<DiabeteAttribute>().ToList();
+			//attributes.Remove(DiabeteAttribute.Outcome);
+			var attributes = new List<DiabeteAttribute>();
+			for(int i = 0; i < 8; i++)
+			{
+				if(isUsedAttribute[i] == false)
+				{
+					attributes.Add((DiabeteAttribute)i);
+				}
+			}
+
 			var bestAttribute = attributes.First();
 			var bestInformationGain = CalculateInformationGain(data, bestAttribute);
 			foreach(var attribute in attributes)
@@ -70,57 +81,111 @@ namespace DiabeteProject
 			return bestAttribute;
 		}
 
-		public void BuildTree(List<DiabetesData> data, Node node)
+		#region Temp
+		//public void BuildTree(List<DiabetesData> data, Node node, bool[] isUsedAttribute)
+		//{
+		//	var positive = data.Count(x => x.Outcome == 1);
+		//	var negative = data.Count(x => x.Outcome == 0);
+		//	if(positive == 0 || negative == 0)
+		//	{
+		//		node.Outcome = positive > negative ? 1 : 0;
+		//		return;
+		//	}
+
+		//	var bestAttribute = GetBestAttribute(data, isUsedAttribute);
+		//	isUsedAttribute[(int)bestAttribute] = true;
+		//	node.Attribute = bestAttribute;
+
+		//	var average = data.Average(x => (double)x.GetType().GetProperty(bestAttribute.ToString()).GetValue(x));
+		//	//node.Average = average;
+
+		//	var left = data.Where(x => (double)x.GetType().GetProperty(bestAttribute.ToString()).GetValue(x) < average).ToList();
+		//	var right = data.Where(x => (double)x.GetType().GetProperty(bestAttribute.ToString()).GetValue(x) >= average).ToList();
+
+		//	node.Left = new Node();
+		//	node.Right = new Node();
+		//	BuildTree(left, node.Left, isUsedAttribute);
+		//	BuildTree(right, node.Right, isUsedAttribute);
+		//}
+		#endregion
+
+		public void PrintPretty(Node node,string indent, bool last)
 		{
-			var bestAttribute = GetBestAttribute(data);
-			node.Attribute = bestAttribute;
-			var attributeValues = data.Select(x => x.GetType().GetProperty(bestAttribute.ToString()).GetValue(x)).Distinct();
-			foreach(var attributeValue in attributeValues)
+			Console.Write(indent);
+			if(last)
 			{
-				var child = new Node();
-				child.Value = attributeValue;
-				node.Children.Add(child);
-				var subset = data.Where(x => x.GetType().GetProperty(bestAttribute.ToString()).GetValue(x).Equals(attributeValue)).ToList();
-				if(subset.All(x => x.Outcome == 0))
-				{
-					child.Outcome = 0;
-				}
-				else if(subset.All(x => x.Outcome == 1))
-				{
-					child.Outcome = 1;
-				}
-				else
-				{
-					BuildTree(subset, child);
-				}
+				Console.Write("└─");
+				indent += "  ";
 			}
+			else
+			{
+				Console.Write("├─");
+				indent += "| ";
+			}
+			var nodeData = $"Number of datas: {node.Data.Count} , Attribute : {node.Attribute}";
+			if(node.Outcome != null)
+			{
+				nodeData += $" , Outcome : {node.Outcome}";
+			}
+			Console.WriteLine(nodeData);
+
+			var children = new List<Node>();
+			if(node.Left != null)
+				children.Add(node.Left);
+			if(node.Right != null)
+				children.Add(node.Right);
+
+			for(int i = 0; i < children.Count; i++)
+				PrintPretty(children[i],indent, i == children.Count - 1);
+
 		}
 
 		public void PrintTree(Node node, int level)
 		{
+			Console.WriteLine($"Number of datas: {node.Data.Count} , Attribute : {node.Attribute}");
 			if(node.Outcome != null)
 			{
-				Console.WriteLine($"{new string(' ', level * 2)}{node.Outcome}");
+				Console.WriteLine($"Outcome: {node.Outcome}");
+				return;
 			}
-			else
+			if(node.Left != null)
 			{
-				Console.WriteLine($"{new string(' ', level * 2)}{node.Attribute} = {node.Value}");
-				foreach(var child in node.Children)
-				{
-					PrintTree(child, level + 1);
-				}
+				Console.WriteLine($"Left: ");
+				PrintTree(node.Left, level + 1);
 			}
+			if(node.Right != null)
+			{
+				Console.WriteLine($"Right: ");
+				PrintTree(node.Right, level + 1);
+			}
+			//if(node == null)
+			//{
+			//	return;
+			//}
+			//if(node.Outcome != -1)
+			//{
+			//	Console.WriteLine($"{new string(' ', level)}{node.Outcome}");
+			//	return;
+			//}
+			//Console.WriteLine($"{new string(' ', level)}{node.Attribute}");
+			//PrintTree(node.Left, level + 1);
+			//PrintTree(node.Right, level + 1);
 		}
 	}
-	public class Node
-	{
-		public Node? Right { get; set; }
-		public Node? Left { get; set; }
-		public Node? Parent { get; set; }
+}
+public class Node
+{
+	public List<DiabetesData> Data { get; set; } = new List<DiabetesData>();
+	public Node? Right { get; set; }
+	public Node? Left { get; set; }
+	public Node? Parent { get; set; }
 
-		public DiabeteAttribute? Attribute { get; set; }
+	public DiabeteAttribute? Attribute { get; set; }
 
-		public double? SplitValue { get; set; }
-		public double? Value { get; set; }
-	}
+	public double? SplitValue { get; set; }
+
+	/// <summary>
+	/// The result of the leaf
+	/// </summary>
+	public int? Outcome { get; set; }
 }
