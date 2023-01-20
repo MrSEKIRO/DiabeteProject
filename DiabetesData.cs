@@ -1,7 +1,4 @@
-﻿// read diabets.csv 
-
-// Pregnancies,Glucose,BloodPressure,SkinThickness,Insulin,BMI,DiabetesPedigreeFunction,Age,Outcome
-public class DiabetesData
+﻿public class DiabetesData
 {
 	public int Id { get; set; }
 	public int Pregnancies { get; set; }
